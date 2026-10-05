@@ -1,9 +1,13 @@
 import { spawn } from "node:child_process";
 import type http from "node:http";
-import { findServerById, IS_CLOUD, validateRequest } from "@dokploy/server";
+import {
+	findServerById,
+	getSshManager,
+	IS_CLOUD,
+	validateRequest,
+} from "@dokploy/server";
 import { encodeBase64 } from "@dokploy/server/utils/docker/utils";
 import { readValidDirectory } from "@dokploy/server/wss/utils";
-import { Client } from "ssh2";
 import { WebSocketServer } from "ws";
 
 export const setupDeploymentLogsWebSocketServer = (
@@ -57,7 +61,6 @@ export const setupDeploymentLogsWebSocketServer = (
 		}
 
 		let tailProcess: ReturnType<typeof spawn> | null = null;
-		let sshClient: Client | null = null;
 
 		// `killed` is set once a signal is sent, not when the process exits.
 		const isTailRunning = () =>
@@ -96,55 +99,39 @@ export const setupDeploymentLogsWebSocketServer = (
 					return;
 				}
 
-				sshClient = new Client();
-				sshClient
-					.on("ready", () => {
-						const encodedPath = encodeBase64(logPath);
-						const command = `tail -n +1 -f "$(echo '${encodedPath}' | base64 -d)"`;
+				const conn = await getSshManager(server).getClient();
+				const encodedPath = encodeBase64(logPath);
+				const command = `tail -n +1 -f "$(echo '${encodedPath}' | base64 -d)"`;
 
-						sshClient!.exec(command, (err, stream) => {
-							if (err) {
-								sshClient!.end();
-								ws.close();
-								return;
-							}
-							stream
-								.on("close", () => {
-									sshClient!.end();
-									ws.close();
-								})
-								.on("data", (data: string) => {
-									if (ws.readyState === ws.OPEN) {
-										ws.send(data.toString());
-									}
-								})
-								.stderr.on("data", (data) => {
-									if (ws.readyState === ws.OPEN) {
-										ws.send(data.toString());
-									}
-								});
-						});
-					})
-					.on("error", (err) => {
+				conn.exec(command, (err, stream) => {
+					if (err) {
 						if (ws.readyState === ws.OPEN) {
 							ws.send(`SSH error: ${err.message}`);
 							ws.close();
 						}
-						if (sshClient) {
-							sshClient.end();
-						}
-					})
-					.connect({
-						host: server.ipAddress,
-						port: server.port,
-						username: server.username,
-						privateKey: server.sshKey?.privateKey,
-					});
-
-				ws.on("close", () => {
-					if (sshClient) {
-						sshClient.end();
+						return;
 					}
+					stream
+						.on("close", () => {
+							ws.close();
+						})
+						.on("data", (data: string) => {
+							if (ws.readyState === ws.OPEN) {
+								ws.send(data.toString());
+							}
+						})
+						.stderr.on("data", (data) => {
+							if (ws.readyState === ws.OPEN) {
+								ws.send(data.toString());
+							}
+						});
+
+					ws.on("close", () => {
+						stream.close();
+					});
+					ws.on("error", () => {
+						stream.close();
+					});
 				});
 			} else {
 				if (IS_CLOUD) {
@@ -186,13 +173,9 @@ export const setupDeploymentLogsWebSocketServer = (
 				ws.on("close", stopTailProcess);
 			}
 		} catch (error) {
-			// Clean up resources on error
 			stopTailProcess();
-			if (sshClient) {
-				sshClient.end();
-			}
 			if (ws.readyState === ws.OPEN) {
-				// @ts-ignore
+				// @ts-expect-error
 				const errorMessage = error?.message as unknown as string;
 				ws.send(errorMessage || "An error occurred");
 				ws.close();

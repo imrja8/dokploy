@@ -10,6 +10,7 @@ import {
 	recreateDirectory,
 	recreateDirectoryRemote,
 } from "../filesystem/directory";
+import { createCloudflareSshStream } from "../process/cloudflare-tunnel";
 import { execAsyncRemote } from "../process/execAsync";
 
 export const unzipDrop = async (zipFile: File, application: Application) => {
@@ -111,20 +112,38 @@ const getSFTPConnection = async (serverId: string): Promise<SFTPWrapper> => {
 	const server = await findServerById(serverId);
 	if (!server.sshKeyId) throw new Error("No SSH key available for this server");
 
+	const sock = server.useCloudflareTunnel
+		? await createCloudflareSshStream(server.ipAddress)
+		: undefined;
+
 	return new Promise((resolve, reject) => {
 		const conn = new Client();
 		conn
 			.on("ready", () => {
 				conn.sftp((err, sftp) => {
-					if (err) return reject(err);
+					if (err) {
+						conn.end();
+						return reject(err);
+					}
+					sftp.on("close", () => conn.end());
 					resolve(sftp);
 				});
+			})
+			.on("error", (err) => {
+				conn.end();
+				reject(err);
 			})
 			.connect({
 				host: server.ipAddress,
 				port: server.port,
 				username: server.username,
 				privateKey: server.sshKey?.privateKey,
+				timeout: 99999,
+				...(server.useCloudflareTunnel && {
+					keepaliveInterval: 15_000,
+					keepaliveCountMax: 3,
+				}),
+				sock,
 			});
 	});
 };

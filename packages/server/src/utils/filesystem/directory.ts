@@ -135,7 +135,8 @@ export const getBuildAppDirectory = (application: Application) => {
 };
 
 export const getDockerContextPath = (application: Application) => {
-	const { APPLICATIONS_PATH } = paths(!!application.serverId);
+	const serverId = application.buildServerId || application.serverId;
+	const { APPLICATIONS_PATH } = paths(!!serverId);
 	const { appName, dockerContextPath } = application;
 
 	if (!dockerContextPath) {

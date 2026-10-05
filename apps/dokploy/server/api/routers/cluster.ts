@@ -101,13 +101,22 @@ export const clusterRouter = createTRPCRouter({
 
 			const swarmNodeAddr = info?.Swarm?.NodeAddr;
 			let ip = swarmNodeAddr || (await getLocalServerIp());
+			let tunnelWarning = "";
 			if (!swarmNodeAddr && input.serverId) {
 				const server = await findServerById(input.serverId);
 				ip = server?.ipAddress;
+				if (server?.useCloudflareTunnel) {
+					tunnelWarning =
+						"\n\n# ⚠️  WARNING: This server uses a Cloudflare Tunnel.\n" +
+						"# Docker Swarm requires direct TCP connectivity on ports 2377, 7946, and 4789.\n" +
+						"# These ports are NOT routed through Cloudflare Tunnels.\n" +
+						"# You must establish a direct network connection (e.g. WireGuard) between\n" +
+						"# nodes before running this command, and use a reachable IP address.";
+				}
 			}
 
 			return {
-				command: `docker swarm join --token ${result.JoinTokens.Worker} ${ip}:2377`,
+				command: `docker swarm join --token ${result.JoinTokens.Worker} ${ip}:2377${tunnelWarning}`,
 				version: docker_version.Version,
 			};
 		}),
@@ -135,12 +144,21 @@ export const clusterRouter = createTRPCRouter({
 
 			const swarmNodeAddr = info?.Swarm?.NodeAddr;
 			let ip = swarmNodeAddr || (await getLocalServerIp());
+			let tunnelWarning = "";
 			if (!swarmNodeAddr && input.serverId) {
 				const server = await findServerById(input.serverId);
 				ip = server?.ipAddress;
+				if (server?.useCloudflareTunnel) {
+					tunnelWarning =
+						"\n\n# ⚠️  WARNING: This server uses a Cloudflare Tunnel.\n" +
+						"# Docker Swarm requires direct TCP connectivity on ports 2377, 7946, and 4789.\n" +
+						"# These ports are NOT routed through Cloudflare Tunnels.\n" +
+						"# You must establish a direct network connection (e.g. WireGuard) between\n" +
+						"# nodes before running this command, and use a reachable IP address.";
+				}
 			}
 			return {
-				command: `docker swarm join --token ${result.JoinTokens.Manager} ${ip}:2377`,
+				command: `docker swarm join --token ${result.JoinTokens.Manager} ${ip}:2377${tunnelWarning}`,
 				version: docker_version.Version,
 			};
 		}),

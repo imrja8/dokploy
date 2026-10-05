@@ -623,7 +623,11 @@ export const composeRouter = createTRPCRouter({
 
 			if (input.serverId) {
 				const server = await findServerById(input.serverId);
-				serverIp = server.ipAddress;
+				// Tunnel servers hide the real IP behind a Cloudflare hostname.
+				// Templates that use {{serverIp}} (e.g. Supabase SITE_URL) must be
+				// configured with a real domain by the user; use empty string so the
+				// template is obviously unconfigured rather than silently wrong.
+				serverIp = server.useCloudflareTunnel ? "" : server.ipAddress;
 			} else if (process.env.NODE_ENV === "development") {
 				serverIp = "127.0.0.1";
 			} else {
@@ -831,7 +835,7 @@ export const composeRouter = createTRPCRouter({
 
 				if (compose.serverId) {
 					const server = await findServerById(compose.serverId);
-					serverIp = server.ipAddress;
+					serverIp = server.useCloudflareTunnel ? "" : server.ipAddress;
 				} else if (process.env.NODE_ENV === "development") {
 					serverIp = "127.0.0.1";
 				} else {
@@ -902,7 +906,7 @@ export const composeRouter = createTRPCRouter({
 
 				if (input.serverId) {
 					const server = await findServerById(input.serverId);
-					serverIp = server.ipAddress;
+					serverIp = server.useCloudflareTunnel ? "" : server.ipAddress;
 				} else if (process.env.NODE_ENV !== "development") {
 					const settings = await getWebServerSettings();
 					serverIp = settings?.serverIp || "127.0.0.1";
@@ -973,7 +977,7 @@ export const composeRouter = createTRPCRouter({
 
 				if (compose.serverId) {
 					const server = await findServerById(compose.serverId);
-					serverIp = server.ipAddress;
+					serverIp = server.useCloudflareTunnel ? "" : server.ipAddress;
 				} else if (process.env.NODE_ENV === "development") {
 					serverIp = "127.0.0.1";
 				} else {

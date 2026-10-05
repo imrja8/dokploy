@@ -1,7 +1,7 @@
 import { exec, execFile } from "node:child_process";
 import util from "node:util";
 import { findServerById } from "@dokploy/server/services/server";
-import { Client } from "ssh2";
+import type { Client } from "ssh2";
 import { ExecError } from "./ExecError";
 
 export class WriteFileRemoteError extends Error {
@@ -163,12 +163,13 @@ export const execAsyncRemote = async (
 
 	let stdout = "";
 	let stderr = "";
-	return new Promise((resolve, reject) => {
-		const conn = new Client();
 
-		sleep(1000);
-		conn
-			.once("ready", () => {
+	return new Promise((resolve, reject) => {
+		const sshManager = require("../servers/ssh-manager").getSshManager(server);
+
+		sshManager
+			.getClient()
+			.then((conn: Client) => {
 				conn.exec(command, (err, stream) => {
 					if (err) {
 						onData?.(err.message);
@@ -183,7 +184,7 @@ export const execAsyncRemote = async (
 					}
 					stream
 						.on("close", (code: number, _signal: string) => {
-							conn.end();
+							// DO NOT call conn.end() here! We want to keep the connection alive!
 							if (code === 0) {
 								resolve({ stdout, stderr });
 							} else {
@@ -205,14 +206,13 @@ export const execAsyncRemote = async (
 							stdout += data.toString();
 							onData?.(data.toString());
 						})
-						.stderr.on("data", (data) => {
+						.stderr.on("data", (data: string) => {
 							stderr += data.toString();
 							onData?.(data.toString());
 						});
 				});
 			})
-			.on("error", (err) => {
-				conn.end();
+			.catch((err: any) => {
 				if (err.level === "client-authentication") {
 					const technicalDetail = `Error: ${err.message} ${err.level}`;
 					const friendlyMessage = [
@@ -251,13 +251,6 @@ export const execAsyncRemote = async (
 						}),
 					);
 				}
-			})
-			.connect({
-				host: server.ipAddress,
-				port: server.port,
-				username: server.username,
-				privateKey: server.sshKey?.privateKey,
-				timeout: 99999,
 			});
 	});
 };
@@ -271,12 +264,13 @@ export const writeFileRemote = async (
 	if (!server.sshKeyId) throw new Error("No SSH key available for this server");
 
 	return new Promise((resolve, reject) => {
-		const conn = new Client();
-		conn
-			.once("ready", () => {
+		const sshManager = require("../servers/ssh-manager").getSshManager(server);
+
+		sshManager
+			.getClient()
+			.then((conn: Client) => {
 				conn.sftp((err, sftp) => {
 					if (err) {
-						conn.end();
 						reject(
 							new WriteFileRemoteError(`SFTP session failed: ${err.message}`, {
 								remotePath,
@@ -287,7 +281,7 @@ export const writeFileRemote = async (
 						return;
 					}
 					sftp.writeFile(remotePath, content, (writeErr) => {
-						conn.end();
+						// DO NOT call conn.end() here! We want to keep the connection alive!
 						if (writeErr) {
 							reject(
 								new WriteFileRemoteError(
@@ -301,8 +295,7 @@ export const writeFileRemote = async (
 					});
 				});
 			})
-			.on("error", (err) => {
-				conn.end();
+			.catch((err: any) => {
 				reject(
 					new WriteFileRemoteError(`SSH connection error: ${err.message}`, {
 						remotePath,
@@ -310,13 +303,6 @@ export const writeFileRemote = async (
 						originalError: err,
 					}),
 				);
-			})
-			.connect({
-				host: server.ipAddress,
-				port: server.port,
-				username: server.username,
-				privateKey: server.sshKey?.privateKey,
-				timeout: 99999,
 			});
 	});
 };

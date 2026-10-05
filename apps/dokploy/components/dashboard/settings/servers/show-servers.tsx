@@ -305,24 +305,43 @@ export const ShowServers = () => {
 
 																				{isCloud &&
 																					server.sshKeyId &&
-																					!isBuildServer && (
-																						<Tooltip>
-																							<TooltipTrigger asChild>
-																								<div>
-																									<ShowMonitoringModal
-																										url={`http://${server.ipAddress}:${server?.metricsConfig?.server?.port}/metrics`}
-																										token={
-																											server?.metricsConfig
-																												?.server?.token
-																										}
-																									/>
-																								</div>
-																							</TooltipTrigger>
-																							<TooltipContent>
-																								<p>Monitoring</p>
-																							</TooltipContent>
-																						</Tooltip>
-																					)}
+																					!isBuildServer &&
+																					(() => {
+																						const hasExplicitMetricsUrl =
+																							!!server?.metricsConfig?.server
+																								?.metricsUrl;
+																						const metricsBlocked =
+																							server.useCloudflareTunnel &&
+																							!hasExplicitMetricsUrl;
+																						const metricsUrl =
+																							hasExplicitMetricsUrl
+																								? `${server.metricsConfig?.server?.metricsUrl?.replace(/\/$/, "")}/metrics`
+																								: `http://${server.ipAddress}:${server?.metricsConfig?.server?.port}/metrics`;
+																						return (
+																							<Tooltip>
+																								<TooltipTrigger asChild>
+																									<div>
+																										<ShowMonitoringModal
+																											url={metricsUrl}
+																											token={
+																												server?.metricsConfig
+																													?.server?.token
+																											}
+																											disabled={metricsBlocked}
+																											serverId={server.serverId}
+																										/>
+																									</div>
+																								</TooltipTrigger>
+																								<TooltipContent>
+																									<p>
+																										{metricsBlocked
+																											? "Set a Metrics URL in server settings to enable monitoring over Cloudflare Tunnel"
+																											: "Monitoring"}
+																									</p>
+																								</TooltipContent>
+																							</Tooltip>
+																						);
+																					})()}
 
 																				<div className="flex-1" />
 

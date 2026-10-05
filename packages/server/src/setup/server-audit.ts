@@ -1,5 +1,6 @@
 import { Client } from "ssh2";
 import { findServerById } from "../services/server";
+import { createCloudflareSshStream } from "../utils/process/cloudflare-tunnel";
 
 // Thanks for the idea to https://github.com/healthyhost/audit-vps-script/tree/main
 const validateUfw = () => `
@@ -88,6 +89,10 @@ export const serverAudit = async (serverId: string) => {
 		throw new Error("No SSH Key found");
 	}
 
+	const sock = server.useCloudflareTunnel
+		? await createCloudflareSshStream(server.ipAddress)
+		: undefined;
+
 	return new Promise<any>((resolve, reject) => {
 		client
 			.once("ready", () => {
@@ -146,6 +151,7 @@ export const serverAudit = async (serverId: string) => {
 				port: server.port,
 				username: server.username,
 				privateKey: server.sshKey?.privateKey,
+				sock,
 			});
 	});
 };

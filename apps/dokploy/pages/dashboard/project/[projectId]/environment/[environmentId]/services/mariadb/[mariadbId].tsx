@@ -265,6 +265,7 @@ const Mariadb = (
 															token={
 																data?.server?.metricsConfig?.server?.token || ""
 															}
+															serverId={data?.serverId || undefined}
 														/>
 													) : (
 														<>

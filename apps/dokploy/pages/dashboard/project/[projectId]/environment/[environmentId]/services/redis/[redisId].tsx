@@ -263,6 +263,7 @@ const Redis = (
 															token={
 																data?.server?.metricsConfig?.server?.token || ""
 															}
+															serverId={data?.serverId || undefined}
 														/>
 													) : (
 														<>

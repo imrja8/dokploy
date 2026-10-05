@@ -1,5 +1,6 @@
 import type http from "node:http";
 import {
+	createCloudflareSshStream,
 	execAsync,
 	findServerById,
 	IS_CLOUD,
@@ -33,20 +34,20 @@ sudo chown -R $USER:$USER /etc/dokploy/ssh
 `;
 
 export const getPublicIpWithFallback = async () => {
-	// @ts-ignore
+	// @ts-expect-error
 	let ip = null;
 	try {
 		ip = await publicIpv4();
 	} catch (error) {
 		console.log(
 			"Error to obtain public IPv4 address, falling back to IPv6",
-			// @ts-ignore
+			// @ts-expect-error
 			error.message,
 		);
 		try {
 			ip = await publicIpv6();
 		} catch (error) {
-			// @ts-ignore
+			// @ts-expect-error
 			console.error("Error to obtain public IPv6 address", error.message);
 			ip = null;
 		}
@@ -56,7 +57,7 @@ export const getPublicIpWithFallback = async () => {
 
 export const getLocalServerIp = async () => {
 	try {
-		const command = `ip addr show | grep -E "inet (192\.168\.|10\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.)" | head -n1 | awk '{print $2}' | cut -d/ -f1`;
+		const command = `ip addr show | grep -E "inet (192.168.|10.|172.1[6-9].|172.2[0-9].|172.3[0-1].)" | head -n1 | awk '{print $2}' | cut -d/ -f1`;
 		const { stdout } = await execAsync(command);
 		const ip = stdout.trim();
 		return (
@@ -161,35 +162,59 @@ export const setupTerminalWebSocketServer = (
 				return;
 			}
 		} else {
-			const server = await findServerById(serverId);
+			try {
+				const server = await findServerById(serverId);
 
-			if (!server) {
+				if (!server) {
+					ws.close();
+					return;
+				}
+
+				if (server.organizationId !== session.activeOrganizationId) {
+					ws.close();
+					return;
+				}
+
+				const {
+					ipAddress: host,
+					port,
+					username,
+					sshKey,
+					sshKeyId,
+					useCloudflareTunnel,
+				} = server;
+
+				if (!sshKeyId) {
+					ws.send("No SSH key available for this server");
+					ws.close();
+					return;
+				}
+
+				const sock = useCloudflareTunnel
+					? await createCloudflareSshStream(host)
+					: undefined;
+
+				connectionDetails = {
+					host,
+					port,
+					username,
+					privateKey: sshKey?.privateKey,
+					sock,
+				};
+			} catch (error) {
+				ws.send(`Connection error: ${(error as Error).message}`);
 				ws.close();
 				return;
 			}
-
-			if (server.organizationId !== session.activeOrganizationId) {
-				ws.close();
-				return;
-			}
-
-			const { ipAddress: host, port, username, sshKey, sshKeyId } = server;
-
-			if (!sshKeyId) {
-				throw new Error("No SSH key available for this server");
-			}
-
-			connectionDetails = {
-				host,
-				port,
-				username,
-				privateKey: sshKey?.privateKey,
-			};
 		}
 
 		const conn = new Client();
 		let _stdout = "";
 		let _stderr = "";
+
+		ws.on("error", () => {
+			conn.end();
+		});
 
 		ws.send("Connecting...\n");
 
@@ -232,7 +257,7 @@ export const setupTerminalWebSocketServer = (
 							}
 							stream.write(text);
 						} catch (error) {
-							// @ts-ignore
+							// @ts-expect-error
 							const errorMessage = error?.message as unknown as string;
 							ws.send(errorMessage);
 						}
@@ -240,6 +265,7 @@ export const setupTerminalWebSocketServer = (
 
 					ws.on("close", () => {
 						stream.end();
+						conn.end();
 					});
 				});
 			})

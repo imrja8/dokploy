@@ -266,6 +266,7 @@ const MySql = (
 																	data?.server?.metricsConfig?.server?.token ||
 																	""
 																}
+																serverId={data?.serverId || undefined}
 															/>
 														) : (
 															<>

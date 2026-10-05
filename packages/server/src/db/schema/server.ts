@@ -42,6 +42,7 @@ export const server = pgTable("server", {
 		.notNull()
 		.$defaultFn(() => generateAppName("server")),
 	enableDockerCleanup: boolean("enableDockerCleanup").notNull().default(false),
+	useCloudflareTunnel: boolean("useCloudflareTunnel").notNull().default(false),
 	buildsConcurrency: integer("buildsConcurrency").notNull().default(1),
 	createdAt: text("createdAt").notNull(),
 	organizationId: text("organizationId")
@@ -63,6 +64,7 @@ export const server = pgTable("server", {
 				urlCallback: string;
 				retentionDays: number;
 				cronJob: string;
+				metricsUrl?: string;
 				thresholds: {
 					cpu: number;
 					memory: number;
@@ -85,6 +87,7 @@ export const server = pgTable("server", {
 				token: "",
 				urlCallback: "",
 				cronJob: "",
+				metricsUrl: "",
 				retentionDays: 2,
 				thresholds: {
 					cpu: 0,
@@ -151,10 +154,12 @@ export const apiCreateServer = createSchema
 		sshKeyId: true,
 		serverType: true,
 		enableDockerCleanup: true,
+		useCloudflareTunnel: true,
 	})
 	.required()
 	.extend({
 		enableDockerCleanup: z.boolean().default(true),
+		useCloudflareTunnel: z.boolean().default(false),
 	});
 
 export const apiFindOneServer = z.object({
@@ -178,11 +183,13 @@ export const apiUpdateServer = createSchema
 		sshKeyId: true,
 		serverType: true,
 		enableDockerCleanup: true,
+		useCloudflareTunnel: true,
 	})
 	.required()
 	.extend({
 		command: z.string().optional(),
 		enableDockerCleanup: z.boolean().default(true),
+		useCloudflareTunnel: z.boolean().default(false),
 	});
 
 export const apiUpdateServerBuildsConcurrency = z.object({
@@ -205,6 +212,7 @@ export const apiUpdateServerMonitoring = createSchema
 					urlCallback: z.string().url(),
 					retentionDays: z.number().min(1),
 					cronJob: z.string().min(1),
+					metricsUrl: z.string().optional(),
 					thresholds: z.object({
 						cpu: z.number().min(0),
 						memory: z.number().min(0),

@@ -4,10 +4,12 @@ import {
 	createAccountDeletionCode,
 	createApiKey,
 	createOrganizationUserWithCredentials,
+	execAsyncRemote,
 	findCredentialAccount,
 	findNotificationById,
 	findOrganizationById,
 	findPasskeysByUserId,
+	findServerById,
 	findUserById,
 	getDokployUrl,
 	getUserByToken,
@@ -659,6 +661,7 @@ export const userRouter = createTRPCRouter({
 				token: z.string(),
 				appName: z.string(),
 				dataPoints: z.string(),
+				serverId: z.string().optional(),
 			}),
 		)
 		.query(async ({ input }) => {
@@ -672,21 +675,46 @@ export const userRouter = createTRPCRouter({
 						].join("\n"),
 					);
 				}
-				const url = new URL(`${input.url}/metrics/containers`);
-				url.searchParams.append("limit", input.dataPoints);
-				url.searchParams.append("appName", input.appName);
-				const response = await fetch(url.toString(), {
-					headers: {
-						Authorization: `Bearer ${input.token}`,
-					},
-				});
-				if (!response.ok) {
-					throw new Error(
-						`Error ${response.status}: ${response.statusText}. Please verify that the application "${input.appName}" is running and this service is included in the monitoring configuration.`,
-					);
+				const parsedUrl = new URL(`${input.url}/metrics/containers`);
+				parsedUrl.searchParams.append("limit", input.dataPoints);
+				parsedUrl.searchParams.append("appName", input.appName);
+
+				let rawJson: string;
+
+				if (input.serverId) {
+					const remoteServer = await findServerById(input.serverId);
+					if (remoteServer.useCloudflareTunnel) {
+						const localUrl = new URL(parsedUrl.toString());
+						localUrl.hostname = "127.0.0.1";
+						const { stdout } = await execAsyncRemote(
+							input.serverId,
+							`curl -sf -H "Authorization: Bearer ${input.token}" "${localUrl.toString()}"`,
+						);
+						rawJson = stdout;
+					} else {
+						const response = await fetch(parsedUrl.toString(), {
+							headers: { Authorization: `Bearer ${input.token}` },
+						});
+						if (!response.ok) {
+							throw new Error(
+								`Error ${response.status}: ${response.statusText}. Please verify that the application "${input.appName}" is running and this service is included in the monitoring configuration.`,
+							);
+						}
+						rawJson = await response.text();
+					}
+				} else {
+					const response = await fetch(parsedUrl.toString(), {
+						headers: { Authorization: `Bearer ${input.token}` },
+					});
+					if (!response.ok) {
+						throw new Error(
+							`Error ${response.status}: ${response.statusText}. Please verify that the application "${input.appName}" is running and this service is included in the monitoring configuration.`,
+						);
+					}
+					rawJson = await response.text();
 				}
 
-				const data = await response.json();
+				const data = JSON.parse(rawJson);
 				if (!Array.isArray(data) || data.length === 0) {
 					throw new Error(
 						[

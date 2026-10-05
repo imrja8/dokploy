@@ -1,5 +1,6 @@
 import { Client } from "ssh2";
 import { findServerById } from "../services/server";
+import { createCloudflareSshStream } from "../utils/process/cloudflare-tunnel";
 
 export const validateDocker = () => `
   if command_exists docker; then
@@ -104,6 +105,10 @@ export const serverValidate = async (serverId: string) => {
 		throw new Error("No SSH Key found");
 	}
 
+	const sock = server.useCloudflareTunnel
+		? await createCloudflareSshStream(server.ipAddress)
+		: undefined;
+
 	return new Promise<string>((resolve, reject) => {
 		client
 			.once("ready", () => {
@@ -185,6 +190,7 @@ export const serverValidate = async (serverId: string) => {
 				port: server.port,
 				username: server.username,
 				privateKey: server.sshKey?.privateKey,
+				sock,
 			});
 	});
 };

@@ -55,6 +55,7 @@ const Schema = z.object({
 	}),
 	serverType: z.enum(["deploy", "build"]).default("deploy"),
 	enableDockerCleanup: z.boolean().default(true),
+	useCloudflareTunnel: z.boolean().default(false),
 });
 
 type Schema = z.infer<typeof Schema>;
@@ -93,6 +94,7 @@ export const HandleServers = ({ serverId, asButton = false }: Props) => {
 			sshKeyId: "",
 			serverType: "deploy",
 			enableDockerCleanup: true,
+			useCloudflareTunnel: false,
 		},
 		resolver: zodResolver(Schema),
 	});
@@ -107,6 +109,7 @@ export const HandleServers = ({ serverId, asButton = false }: Props) => {
 			sshKeyId: data?.sshKeyId || "",
 			serverType: data?.serverType || "deploy",
 			enableDockerCleanup: data?.enableDockerCleanup ?? true,
+			useCloudflareTunnel: data?.useCloudflareTunnel ?? false,
 		});
 	}, [form, form.reset, form.formState.isSubmitSuccessful, data]);
 
@@ -124,6 +127,7 @@ export const HandleServers = ({ serverId, asButton = false }: Props) => {
 			sshKeyId: data.sshKeyId || "",
 			serverType: data.serverType || "deploy",
 			enableDockerCleanup: data.enableDockerCleanup,
+			useCloudflareTunnel: data.useCloudflareTunnel,
 			serverId: serverId || "",
 		})
 			.then(async (_data) => {
@@ -367,11 +371,39 @@ export const HandleServers = ({ serverId, asButton = false }: Props) => {
 								name="ipAddress"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>IP Address</FormLabel>
+										<div className="flex items-center justify-between">
+											<FormLabel>
+												{form.watch("useCloudflareTunnel")
+													? "Tunnel Hostname"
+													: "IP Address"}
+											</FormLabel>
+											<FormField
+												control={form.control}
+												name="useCloudflareTunnel"
+												render={({ field: tunnelField }) => (
+													<div className="flex items-center gap-2">
+														<span className="text-xs text-muted-foreground">
+															Cloudflare tunnel?
+														</span>
+														<Switch
+															checked={tunnelField.value}
+															onCheckedChange={tunnelField.onChange}
+															className="scale-75 origin-right"
+														/>
+													</div>
+												)}
+											/>
+										</div>
 										<FormControl>
-											<Input placeholder="192.168.1.100" {...field} />
+											<Input
+												placeholder={
+													form.watch("useCloudflareTunnel")
+														? "ssh.yourdomain.com"
+														: "192.168.1.100"
+												}
+												{...field}
+											/>
 										</FormControl>
-
 										<FormMessage />
 									</FormItem>
 								)}

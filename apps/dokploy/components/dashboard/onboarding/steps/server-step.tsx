@@ -22,6 +22,7 @@ import {
 	FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { api } from "@/utils/api";
 import { displayFont } from "../font";
 
@@ -31,6 +32,7 @@ const schema = z.object({
 		.string()
 		.min(1, "IP address is required")
 		.refine((value) => !/\s/.test(value), "IP address cannot contain spaces"),
+	useCloudflareTunnel: z.boolean(),
 });
 type Schema = z.infer<typeof schema>;
 
@@ -170,7 +172,11 @@ export const ServerStep = ({ onNext, plainTitle }: Props) => {
 	);
 
 	const form = useForm<Schema>({
-		defaultValues: { name: "My First Server", ipAddress: "" },
+		defaultValues: {
+			name: "My First Server",
+			ipAddress: "",
+			useCloudflareTunnel: false,
+		},
 		resolver: zodResolver(schema),
 	});
 
@@ -189,6 +195,7 @@ export const ServerStep = ({ onNext, plainTitle }: Props) => {
 				sshKeyId: cloudSSHKey.sshKeyId,
 				serverType: "deploy",
 				enableDockerCleanup: false,
+				useCloudflareTunnel: data.useCloudflareTunnel,
 			});
 			setCreatedServerId(server.serverId);
 		} catch (error) {
@@ -278,9 +285,38 @@ export const ServerStep = ({ onNext, plainTitle }: Props) => {
 								name="ipAddress"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>2. IP address</FormLabel>
+										<div className="flex items-center justify-between">
+											<FormLabel>
+												{form.watch("useCloudflareTunnel")
+													? "2. Tunnel Hostname"
+													: "2. IP address"}
+											</FormLabel>
+											<FormField
+												control={form.control}
+												name="useCloudflareTunnel"
+												render={({ field: tunnelField }) => (
+													<div className="flex items-center gap-2">
+														<span className="text-xs text-muted-foreground">
+															Cloudflare tunnel?
+														</span>
+														<Switch
+															checked={tunnelField.value}
+															onCheckedChange={tunnelField.onChange}
+															className="scale-75 origin-right"
+														/>
+													</div>
+												)}
+											/>
+										</div>
 										<FormControl>
-											<Input placeholder="192.168.1.100" {...field} />
+											<Input
+												placeholder={
+													form.watch("useCloudflareTunnel")
+														? "ssh.yourdomain.com"
+														: "192.168.1.100"
+												}
+												{...field}
+											/>
 										</FormControl>
 										<FormMessage />
 									</FormItem>

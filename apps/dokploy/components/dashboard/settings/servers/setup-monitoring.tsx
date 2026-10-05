@@ -57,6 +57,7 @@ const Schema = z.object({
 			retentionDays: z.number().min(1, {
 				message: "Retention days must be at least 1",
 			}),
+			metricsUrl: z.string().optional(),
 			thresholds: z.object({
 				cpu: z.number().min(0),
 				memory: z.number().min(0),
@@ -131,6 +132,7 @@ export const SetupMonitoring = ({ serverId }: Props) => {
 					token: "",
 					urlCallback: `${url}/api/trpc/notification.receiveNotification`,
 					retentionDays: 7,
+					metricsUrl: "",
 					thresholds: {
 						cpu: 0,
 						memory: 0,
@@ -160,6 +162,7 @@ export const SetupMonitoring = ({ serverId }: Props) => {
 							data?.metricsConfig?.server?.urlCallback ||
 							`${url}/api/trpc/notification.receiveNotification`,
 						retentionDays: data?.metricsConfig?.server?.retentionDays || 5,
+						metricsUrl: (data?.metricsConfig?.server as any)?.metricsUrl || "",
 						thresholds: {
 							cpu: data?.metricsConfig?.server?.thresholds?.cpu,
 							memory: data?.metricsConfig?.server?.thresholds?.memory,
@@ -335,6 +338,26 @@ export const SetupMonitoring = ({ serverId }: Props) => {
 										</FormControl>
 										<FormDescription>
 											Please set the port for the metrics server
+										</FormDescription>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="metricsConfig.server.metricsUrl"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Custom Metrics URL (Optional)</FormLabel>
+										<FormControl>
+											<Input
+												placeholder="https://metrics.yourdomain.com"
+												{...field}
+											/>
+										</FormControl>
+										<FormDescription>
+											Override the default metrics endpoint (useful for
+											Cloudflare tunnels).
 										</FormDescription>
 										<FormMessage />
 									</FormItem>

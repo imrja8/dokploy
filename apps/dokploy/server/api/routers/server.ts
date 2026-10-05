@@ -2,6 +2,7 @@ import {
 	createServer,
 	defaultCommand,
 	deleteServer,
+	execAsyncRemote,
 	findServerById,
 	findServersByUserId,
 	findUserById,
@@ -427,6 +428,7 @@ export const serverRouter = createTRPCRouter({
 							token: input.metricsConfig.server.token,
 							urlCallback: input.metricsConfig.server.urlCallback,
 							cronJob: input.metricsConfig.server.cronJob,
+							metricsUrl: input.metricsConfig.server.metricsUrl,
 							thresholds: {
 								cpu: input.metricsConfig.server.thresholds.cpu,
 								memory: input.metricsConfig.server.thresholds.memory,
@@ -568,24 +570,52 @@ export const serverRouter = createTRPCRouter({
 				url: z.string(),
 				token: z.string(),
 				dataPoints: z.string(),
+				serverId: z.string().optional(),
 			}),
 		)
 		.query(async ({ input }) => {
 			try {
-				const url = new URL(input.url);
-				url.searchParams.append("limit", input.dataPoints);
-				const response = await fetch(url.toString(), {
-					headers: {
-						Authorization: `Bearer ${input.token}`,
-					},
-				});
-				if (!response.ok) {
-					throw new Error(
-						`Error ${response.status}: ${response.statusText}. Ensure the container is running and this service is included in the monitoring configuration.`,
-					);
+				const parsedUrl = new URL(input.url);
+				parsedUrl.searchParams.append("limit", input.dataPoints);
+
+				let rawJson: string;
+
+				// For tunnel servers the metrics port is not publicly reachable.
+				// Proxy the HTTP request through the SSH tunnel via curl on the remote host.
+				if (input.serverId) {
+					const remoteServer = await findServerById(input.serverId);
+					if (remoteServer.useCloudflareTunnel) {
+						const localUrl = new URL(parsedUrl.toString());
+						localUrl.hostname = "127.0.0.1";
+						const { stdout } = await execAsyncRemote(
+							input.serverId,
+							`curl -sf -H "Authorization: Bearer ${input.token}" "${localUrl.toString()}"`,
+						);
+						rawJson = stdout;
+					} else {
+						const response = await fetch(parsedUrl.toString(), {
+							headers: { Authorization: `Bearer ${input.token}` },
+						});
+						if (!response.ok) {
+							throw new Error(
+								`Error ${response.status}: ${response.statusText}. Ensure the container is running and this service is included in the monitoring configuration.`,
+							);
+						}
+						rawJson = await response.text();
+					}
+				} else {
+					const response = await fetch(parsedUrl.toString(), {
+						headers: { Authorization: `Bearer ${input.token}` },
+					});
+					if (!response.ok) {
+						throw new Error(
+							`Error ${response.status}: ${response.statusText}. Ensure the container is running and this service is included in the monitoring configuration.`,
+						);
+					}
+					rawJson = await response.text();
 				}
 
-				const data = await response.json();
+				const data = JSON.parse(rawJson);
 				if (!Array.isArray(data) || data.length === 0) {
 					throw new Error(
 						[

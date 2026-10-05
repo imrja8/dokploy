@@ -54,8 +54,11 @@ export const generateTraefikMeDomain = async (
 ) => {
 	if (serverId) {
 		const server = await findServerById(serverId);
+		// Tunnel servers store a Cloudflare hostname, not a public IP.
+		// sslip.io/traefik.me only work with real IPs; return empty to signal unsupported.
+		const ip = server.useCloudflareTunnel ? "" : server.ipAddress;
 		return generateRandomDomain({
-			serverIp: server.ipAddress,
+			serverIp: ip,
 			projectName: appName,
 		});
 	}

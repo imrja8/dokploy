@@ -1,0 +1,2 @@
+ALTER TABLE "server" ALTER COLUMN "metricsConfig" SET DEFAULT '{"server":{"type":"Remote","refreshRate":60,"port":4500,"token":"","urlCallback":"","cronJob":"","metricsUrl":"","retentionDays":2,"thresholds":{"cpu":0,"memory":0}},"containers":{"refreshRate":60,"services":{"include":[],"exclude":[]}}}'::jsonb;--> statement-breakpoint
+ALTER TABLE "server" ADD COLUMN "useCloudflareTunnel" boolean DEFAULT false NOT NULL;

@@ -135,10 +135,17 @@ export const createPreviewDeployment = async (
 	const org = await db.query.organization.findFirst({
 		where: eq(organization.id, application.environment.project.organizationId),
 	});
+	// Tunnel servers store a Cloudflare hostname, not a public IP.
+	// sslip.io wildcard domains require a real IP; use empty string so the
+	// caller falls back to a non-IP-based domain or shows a config warning.
+	const serverIpForDomain =
+		application.server?.useCloudflareTunnel
+			? ""
+			: application.server?.ipAddress || "";
 	const generateDomain = await generateWildcardDomain(
 		application.previewWildcard || "*.sslip.io",
 		appName,
-		application.server?.ipAddress || "",
+		serverIpForDomain,
 		org?.ownerId || "",
 	);
 

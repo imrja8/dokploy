@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { findServerById } from "@dokploy/server/services/server";
 import { Client } from "ssh2";
+import { createCloudflareSshStream } from "./cloudflare-tunnel";
 
 export interface ProcessStream {
 	stdin: NodeJS.WritableStream;
@@ -31,6 +32,10 @@ export const openProcessStream = async (
 
 	const server = await findServerById(serverId);
 	if (!server.sshKeyId) throw new Error("No SSH key available for this server");
+
+	const sock = server.useCloudflareTunnel
+		? await createCloudflareSshStream(server.ipAddress)
+		: undefined;
 
 	return new Promise((resolve, reject) => {
 		const conn = new Client();
@@ -75,6 +80,7 @@ export const openProcessStream = async (
 				privateKey: server.sshKey?.privateKey,
 				readyTimeout: 30_000,
 				keepaliveInterval: 15_000,
+				sock,
 			});
 	});
 };
